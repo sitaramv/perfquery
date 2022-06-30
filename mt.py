@@ -12,8 +12,8 @@ import decimal
 import multiprocessing
 
 cfg = {
-       "loaddata": False,                     # control bucket/scope/collection/index/data drop/creation/load
-       "execute": True,                       # control execute queries
+       "loaddata": True,                     # control bucket/scope/collection/index/data drop/creation/load
+       "execute": False,                       # control execute queries
        "nthreads" : 15,                       # max number of client threads (might lowered by load setting)
        "host": 'http://172.23.97.79',         # querynode host ip
        "replicas": 0,                         # replica setting
@@ -28,6 +28,7 @@ cfg = {
        "batchsize": 100,                      # batchsize (i.e. qualified rows per query)
        "qualifiedbatches": 1,                 # number of batches (to increase qualified rows per query)
        "tcount": 30000,                       # number of requestis per client before stop
+       "indexfile": "index.txt",              # index statements
        "indexes"  : [ "CREATE INDEX ix0 ON col0 (c0, f115) WITH {'defer_build':true}",
                       "CREATE INDEX ix1 ON col0 (c1, f115) WITH {'defer_build':true}",
                       "CREATE INDEX ix2 ON col0 (c2, f115) WITH {'defer_build':true}",
@@ -160,11 +161,13 @@ def create_collections(workload):
     
 # index creation/build per collection (It will not wait, build maight fail if many queued)
 
-def create_collection_indexes(conn, collection):
+def create_collection_indexes(conn, f, collection):
     for ddlc in collection["ddls"] :
         stmt = {"statement":ddlc, "query_context": collection["sc"]}
-        print stmt
+        s = ddlc.replace("col",collection["sc"]+".col")
+        f.write (s + ";\n")
         n1ql_execute(conn, stmt , None)
+    f.write("\n")
 
 # load the data using gocb program and build indexes
 # compile using "go build -o load_data main.go" 
@@ -174,6 +177,7 @@ def load_data(conn, workload):
        return
 
     host = cfg["host"].replace("http://","")
+    f = open(cfg["indexfile"], "w")
     for b in workload.keys():
         bv = workload[b]
         for sc in xrange(0,len(bv["scopes"])) :
@@ -184,7 +188,8 @@ def load_data(conn, workload):
                 cmd += " --batches " + str(cv["batches"]) + " --batch-size " + str(cv["batchsize"])
                 cmd += " --bucket " + b + " --scope " + sv["name"] + " --collection " + cv["name"]
                 systemcmd(cmd)
-                create_collection_indexes(conn, sv["collections"][cc])
+                create_collection_indexes(conn, f, sv["collections"][cc])
+    f.close()
         
 # prepare statements based on workload for all the buckets
 
