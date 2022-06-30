@@ -203,6 +203,7 @@ def prepare_stmts(conn, workload) :
                       continue
                    stmt = cfg["aqueries"][k].replace("col0", cv["name"])
                    nindexes = cfg["nindexes"]
+                   tximplicit = "UPDATE" in stmt
                    if "ac0" in stmt :
                         nindexes = cfg["naindexes"]
                    for iv in xrange(0,nindexes) :
@@ -210,7 +211,7 @@ def prepare_stmts(conn, workload) :
                         lstmt = stmt.replace("c0", tv)
                         sq = generate_prepared_query(conn, qc, lstmt)
                         for nc in xrange(0, queryworkloads[k]) :
-                            sqs.append({"name":sq, "qc": qc, "batches":cv["batches"], "batchsize":cv["batchsize"]})
+                            sqs.append({"name":sq, "qc": qc, "batches":cv["batches"], "batchsize":cv["batchsize"], "tximplicit":tximplicit})
         bv["prepareds"] = sqs
     return
 
@@ -294,6 +295,9 @@ def run_tid(tid, count, tids, workload, debug):
          sq = sqs[rv]
          stmt = {'prepared': '"' + sq["name"] + '"'}
 #         stmt['scan_consistency'] = 'request_plus'
+         if sq["tximplicit"] :
+             stmt['tximplicit']= True
+
          stmt['query_context'] = sq["qc"]
          stmt['$start'] = random.randint(0,sq["batches"]-qualifiedbatches)
          stmt['$end'] = stmt['$start'] + qualifiedbatches - 1
