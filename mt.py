@@ -12,15 +12,16 @@ import decimal
 import multiprocessing
 
 cfg = {
-       "loaddata": True,                     # control bucket/scope/collection/index/data drop/creation/load
-       "execute": False,                       # control execute queries
+       "loaddata": False,                     # control bucket/scope/collection/index/data drop/creation/load
+       "execute": True,                       # control execute queries
        "nthreads" : 15,                       # max number of client threads (might lowered by load setting)
        "host": 'http://172.23.97.79',         # querynode host ip
        "replicas": 0,                         # replica setting
        "memory": 4096,                        # datanode memory  (divided by nbuckets)
        "nbuckets": 4,                         # number of bucktes
-       "nscopes"   : 1,                       # number of scopes per bucket
-       "ncollections" : 2,                    # number of collections per scope
+       "nscopes"   : 2,                       # number of scopes per bucket
+       "dataweightdocs" : 1000000,           # number of docs per each wieght
+       "dataweightpercollection" : 5,         # number of wieght per collection
        "nindexes": 1,                         # number of indexes per collection
        "naindexes": 0,                        # number of array indexes per collection
        "workload" : "q1",                     # workload type (see workloads)
@@ -29,17 +30,17 @@ cfg = {
        "qualifiedbatches": 1,                 # number of batches (to increase qualified rows per query)
        "tcount": 30000,                       # number of requestis per client before stop
        "indexfile": "index.txt",              # index statements
-       "indexes"  : [ "CREATE INDEX ix0 ON col0 (c0, f115) WITH {'defer_build':true}",
-                      "CREATE INDEX ix1 ON col0 (c1, f115) WITH {'defer_build':true}",
-                      "CREATE INDEX ix2 ON col0 (c2, f115) WITH {'defer_build':true}",
-                      "CREATE INDEX ix3 ON col0 (c3, f115) WITH {'defer_build':true}",
-                      "CREATE INDEX ix4 ON col0 (c4, f115) WITH {'defer_build':true}"
+       "indexes"  : [ "CREATE INDEX ix0 IF NOT EXISTS ON col0 (c0, f115) WITH {'defer_build': true}",
+                      "CREATE INDEX ix1 IF NOT EXISTS ON col0 (c1, f115) WITH {'defer_build': true}",
+                      "CREATE INDEX ix2 IF NOT EXISTS ON col0 (c2, f115) WITH {'defer_build': true}",
+                      "CREATE INDEX ix3 IF NOT EXISTS ON col0 (c3, f115) WITH {'defer_build': true}",
+                      "CREATE INDEX ix4 IF NOT EXISTS ON col0 (c4, f115) WITH {'defer_build': true}"
                     ],
-       "aindexes"  : ["CREATE INDEX ixa0 ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac0) FOR v IN a1 END, f115) WITH {'defer_build':true}",
-                      "CREATE INDEX ixa1 ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac1) FOR v IN a1 END, f115) WITH {'defer_build':true}",
-                      "CREATE INDEX ixa2 ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac2) FOR v IN a1 END, f115) WITH {'defer_build':true}",
-                      "CREATE INDEX ixa3 ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac3) FOR v IN a1 END, f115) WITH {'defer_build':true}",
-                      "CREATE INDEX ixa4 ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac4) FOR v IN a1 END, f115) WITH {'defer_build':true}"
+       "aindexes"  : ["CREATE INDEX ixa0 IF NOT EXISTS ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac0) FOR v IN a1 END, f115) WITH {'defer_build': true}",
+                      "CREATE INDEX ixa1 IF NOT EXISTS ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac1) FOR v IN a1 END, f115) WITH {'defer_build': true}",
+                      "CREATE INDEX ixa2 IF NOT EXISTS ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac2) FOR v IN a1 END, f115) WITH {'defer_build': true}",
+                      "CREATE INDEX ixa3 IF NOT EXISTS ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac3) FOR v IN a1 END, f115) WITH {'defer_build': true}",
+                      "CREATE INDEX ixa4 IF NOT EXISTS ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac4) FOR v IN a1 END, f115) WITH {'defer_build': true}"
                     ],
        "aqueries" : {"q0": "SELECT META(d).id, d.f115, d.xxx FROM col0 AS d USE INDEX(`#seqentialscan`) WHERE d.c0 BETWEEN $start AND $end",
                      "q1": "SELECT META(d).id, d.f115, d.xxx FROM col0 AS d WHERE d.c0 BETWEEN $start AND $end",
@@ -58,11 +59,11 @@ cfg = {
                    "medium":{"q0":0, "q1":6, "q2":4, "q3":3, "q4":2, "q5":2, "q6":2, "q7":1, "q8":0, "q9":0},
                    "complex":{"q0":0, "q1":5, "q2":3, "q3":2, "q4":2, "q5":2, "q6":2, "q7":2, "q8":1, "q9":1}},
       "loads": { 
-              "ndocs": {"free":1000000, "light":10000000, "moderate": 30000000, "heavy": 60000000, "superheavy": 1000},
-#              "ndocs": {"free":1000000, "light":10000000, "moderate": 30000000, "heavy": 60000000, "superheavy": 1200000000},
+              "dataweight":        {"free":1, "light":10, "moderate": 30, "heavy": 60, "superheavy": 60},
+              "querytenantweight": {"free":1, "light":5, "moderate": 10, "heavy": 20, "superheavy": 0},
               "50":{"total":20, "free": 3, "light":10, "moderate":5, "heavy":2, "superheavy":0 },
               "90":{"total":20, "free": 0, "light":5, "moderate":10, "heavy":5, "superheavy":0 },
-              "100": {"total":1, "free": 0, "light":0, "moderate":0, "heavy":0, "superheavy":1},
+              "100": {"total":20, "free": 0, "light":0, "moderate":0, "heavy":0, "superheavy":20},
                }
       }
 
@@ -74,29 +75,40 @@ def workload_init():
        for k in load.keys() :
            if k == "total" or load[k] == 0 :
                continue
-           batches = int((cfg["loads"]["ndocs"][k])/cfg["batchsize"])
+           batches = int((cfg["loads"]["dataweight"][k] * cfg["dataweightdocs"])/cfg["batchsize"])
            for nc in xrange(0, factor * load[k]) :
                 ad.append({"type":k, "batches": batches})
                 tbatches = tbatches + batches
-
+       batchespercollection = (cfg["dataweightpercollection"]*cfg["dataweightdocs"])/cfg["batchsize"]
        workload = {}
+       memory = int(cfg["memory"] - 1024*cfg["nbuckets"])
+       if memory < 0 :
+           memory = 0
        for bv in xrange(0, cfg["nbuckets"]) :
           bc = "b" + str(bv) 
           workload[bc] = ad[bv].copy()
-          workload[bc]["memory"] = int(cfg["memory"]*ad[bv]["batches"]/tbatches)
+          bmemory = int(memory*ad[bv]["batches"]/tbatches) + 1024
+          workload[bc]["memory"] = bmemory
           scopes = []
-          for sv in xrange(0,cfg["nscopes"]) :
+          ncollections = int(ad[bv]["batches"]/batchespercollection)
+          nscopes = cfg["nscopes"]
+          if ncollections == 0 :
+              nscopes = 1 
+              ncollections = 1
+          else :
+              ncollections = int(ncollections/nscopes)
+          for sv in xrange(0,nscopes) :
              sc = "s" + str(sv)
              qc = bc + "." + sc
              collections = []
-             for cv in xrange(0,cfg["ncollections"]) :
+             for cv in xrange(0,ncollections) :
                 collection = "col" + str(cv)
                 bindexes = ""
 
                 ddls = []
                 for iv in xrange(0,cfg["nindexes"]) :
                    if bindexes != "" :
-                      bindexes = bindexes + "," 
+                      bindexes = bindexes + ", "
                    bindexes = bindexes + "ix" + str(iv)
 
                    stmt = cfg["indexes"][iv].replace("col0", collection)
@@ -109,10 +121,10 @@ def workload_init():
 
                    stmt = cfg["aindexes"][iv].replace("col0", collection)
                    ddls.append(stmt)
-                ddls.append("BUILD INDEX ON " + collection + "( " + bindexes + " )")
-                batches = int(ad[bv]["batches"]/(cfg["ncollections"]*cfg["nscopes"]))
+                ddls.append("BUILD INDEX ON " + collection + " (" + bindexes + ")")
+                batches = int(ad[bv]["batches"]/(ncollections*nscopes))
                 collections.append({"sc":qc, "name":collection, "ddls": ddls, "batchsize": cfg["batchsize"], "batches": batches})
-          scopes.append({"name": sc, "bc": bc, "collections": collections})
+             scopes.append({"name": sc, "bc": bc, "collections": collections})
           workload[bc]["batchsize"] = cfg["batchsize"]
           workload[bc]["scopes"] = scopes
        return workload
@@ -197,10 +209,8 @@ def prepare_stmts(conn, workload) :
     for b in workload.keys():
         bv = workload[b]
         sqs = []
-        for sc in xrange(0,len(bv["scopes"])) :
-            sv = bv["scopes"][sc]
-            for cc in xrange(0,len(sv["collections"])) :
-                cv = sv["collections"][cc]
+        for sv in bv["scopes"] :
+            for cv in sv["collections"] :
                 qc = cv["sc"]
                 queryworkloads = cfg["workloads"][cfg["workload"]]
                 for k in queryworkloads.keys() :
@@ -220,52 +230,20 @@ def prepare_stmts(conn, workload) :
         bv["prepareds"] = sqs
     return
 
-# based on load requirement/workload assign buckets to client(thread)
-# all free are handled by one thread
-# one light is on one thread
-# one moderate is on 4 threads
-# one heavy is on 6 threads
-# one superheavy is on all threads (special case)
-
-def tid_distribution(nthreads, workload):
+def tenant_distribution(nthreads, workload):
+    tenants = []
     load = cfg["loads"][cfg["load"]]
-    loadt = {}
-    total = 0
+    querytenantweight = cfg["loads"]["querytenantweight"]
     for k in load.keys() :
-        if k == "total" or load[k] == 0 :
-            continue
-        elif k == "free":
-             loadt[k] = 1
-        elif k == "light" :
-             loadt[k] = load[k]
-        elif k == "moderate" :
-             loadt[k] = load[k]*4
-        elif k == "heavy" :
-             loadt[k] = load[k]*6
-        elif k == "superheavy" :
-             loadt[k] = nthreads
-        total = total + loadt[k]
-
-    loadb = {"free":[], "light":[], "moderate":[], "heavy":[], "superheavy":[]}
-
-    for b in workload.keys():
-        bv = workload[b]
-        loadb[bv["type"]].append(b)
-
-    tids = []
-    for tid in xrange(0,total) :
-         if tid == 0 and len(loadb["free"]) > 0 :
-             tids.append(loadb["free"])
-             continue
-         elif len(loadb["superheavy"]) > 0 :
-             tids.append(loadb["superheavy"])
-             continue
-         elif len(tids) >= total :
-             break
-         for k in loadt.keys() :
-             for nc in xrange(0, loadt[k]) :
-                 tids.append(loadb[k])
-    return tids
+        if k != "total" and load[k] > 0 :
+           for b in workload.keys():
+               if workload[b]["type"] == k :
+                  if querytenantweight[k] == 0:
+                     tenants.append(b)
+                  else :
+                     for c in xrange(0, querytenantweight[k]) :
+                        tenants.append(b)
+    return tenants
 
 def n1ql_connection(url):    
     conn = urllib3.connection_from_url(url+ ":8093")
@@ -282,9 +260,8 @@ def n1ql_execute(conn, stmt, posparam):
     return body
 
 
-def run_tid(tid, count, tids, workload, debug):
+def run_tid(tid, count, tenants, workload, debug):
     # get all assigned buckets per this thread
-    buckets = tids[tid]
     time.sleep(tid*0.1)
     random.seed()
     conn = n1ql_connection(cfg["host"])
@@ -292,8 +269,8 @@ def run_tid(tid, count, tids, workload, debug):
 
     for i in xrange (0, count):
     # pick randome bucket from assigned buckets   
-         bucket = random.randint(0,len(buckets)-1)
-         bv =  workload[buckets[bucket]]
+         bucket = random.randint(0,len(tenants)-1)
+         bv =  workload[tenants[bucket]]
     # pick random prepared statement of this bucket (random query/random index combination)
          sqs =  bv["prepareds"]
          rv = random.randint(0,len(sqs)-1)
@@ -309,12 +286,11 @@ def run_tid(tid, count, tids, workload, debug):
          stmt['$limit'] = int(0.2*sq["batchsize"])
          body = n1ql_execute(conn, stmt, None) 
          
-         rtid = random.randint(0,len(tids)-1)
          if body["status"] != "success" :
-             params = {"$start":stmt['$start'], "$end": stmt['$end'], "$limit": stmt['$limit'], "bucket": buckets[bucket]}
+             params = {"$start":stmt['$start'], "$end": stmt['$end'], "$limit": stmt['$limit'], "bucket": tenants[bucket]}
              print "tid:" , tid, "loop: ", i, json.JSONEncoder().encode(body["metrics"]), json.JSONEncoder().encode(body["errors"])
-         elif tid == rtid and (i%100) == 0 :
-             params = {"$start":stmt['$start'], "$end": stmt['$end'], "$limit": stmt['$limit'], "bucket": buckets[bucket]}
+         elif tid == 0 and (i%100) == 0 :
+             params = {"$start":stmt['$start'], "$end": stmt['$end'], "$limit": stmt['$limit'], "bucket": tenants[bucket]}
              print "tid:" , tid, "loop: ", i, json.JSONEncoder().encode(body["metrics"]), params
 
 def generate_prepared_query(conn, qc, qstring):
@@ -331,10 +307,10 @@ def run_execute(conn, workload) :
        return
     prepare_stmts(conn, workload)
     nthreads = int((cfg["nthreads"] * int(cfg["load"]))/100)
-    tids = tid_distribution(nthreads, workload)
+    tenants = tenant_distribution(nthreads, workload)
     jobs = []
     for tid in xrange(0, nthreads):
-        j = multiprocessing.Process(target=run_tid, args=(tid, cfg["tcount"], tids, workload, True))
+        j = multiprocessing.Process(target=run_tid, args=(tid, cfg["tcount"], tenants, workload, True))
         jobs.append(j)
         j.start()
    
