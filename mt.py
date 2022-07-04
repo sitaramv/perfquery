@@ -28,7 +28,7 @@ cfg = {
 #       "dataweightdocs" : 1000000,           # number of docs per each wieght
        "dataweightpercollection" : 5,         # number of wieght per collection
        "nindexes": 1,                         # number of indexes per collection
-       "naindexes": 0,                        # number of array indexes per collection
+       "naindexes": 1,                        # number of array indexes per collection
        "workload" : "q1",                     # workload type (see workloads)
        "load":"100",                          # load percent (see loads)
        "batchsize": 100,                      # batchsize (i.e. qualified rows per query)
@@ -53,11 +53,11 @@ cfg = {
                      "q2": "SELECT META(d).id, d.f115, d.xxx FROM col0 AS d WHERE d.c0 BETWEEN $start AND $end ORDER BY d.c0 DESC LIMIT $limit",
                      "q3": "SELECT META(l).id, l.f115, l.xxx, r.yyy FROM col0 AS l JOIN col0 AS r USE HASH(BUILD) ON l.id = r.id WHERE l.c0 BETWEEN $start AND $end AND r.c0 BETWEEN $start AND $end",
                      "q4": "SELECT g1, COUNT(1) AS cnt FROM col0 AS d WHERE d.c0 BETWEEN $start AND $end GROUP BY IMOD(d.id,10) AS g1 ORDER BY g1",
-                     "q5": "SELECT META(d).id, d.f115, d.xxx FROM col0 AS d WHERE ANY v IN d.a1 SATISFIES v.ac0 BETWEEN $start AND $end AND v.id = 2 END",
+                     "q5": "SELECT META(d).id, d.f115, d.xxx FROM col0 AS d WHERE ANY v IN d.a1 SATISFIES v.ac0 BETWEEN $start AND $end AND v.aid = 2 END",
                      "q6": "WITH cte AS (SELECT RAW t FROM col0 AS t WHERE t.c0 BETWEEN $start AND $end) SELECT META(l).id, l.f115, l.xxx, r.yyy FROM col0 AS l JOIN cte AS r ON l.id = r.id WHERE l.c0 BETWEEN $start AND $end AND r.c0 BETWEEN $start AND $end",
                      "q7": "SELECT META(d).id, d.f115, d.xxx FROM col0 AS d UNNEST d.a1 AS u WHERE u.ac0 BETWEEN $start AND $end AND u.aid = 1",
                      "q8": "UPDATE col0 AS d SET d.comment = d.comment WHERE d.c0 BETWEEN $start AND $end",
-                     "q9": "SELECT META(d).id, d.f115, d.xxx FROM col0 AS d WHERE d.c0 BETWEEN $start AND $end AND udf() = true"
+                     "q9": "SELECT META(d).id, d.f115, d.xxx FROM col0 AS d WHERE d.c0 BETWEEN $start AND $end AND udf(d.c0) = d.c0"
                     },
       "workloads":{"q0": {"q0":20}, "q1": {"q1":20}, "q2": {"q2":20}, "q3": {"q3":20}, "q4": {"q4":20},
                    "q5": {"q5":20}, "q6": {"q6":20}, "q7": {"q7":20}, "q8": {"q8":20}, "q9": {"q9":20},
@@ -126,7 +126,7 @@ def workload_init():
                       bindexes = bindexes + "," 
                    bindexes = bindexes + "ixa" + str(iv)
 
-                   stmt = cfg["aindexes"][iv].replace("col0", collection)
+                   stmt = cfg["aindexes"][iv].replace("col0", collection).replace("indexreplicas",str(cfg["indexreplicas"]))
                    ddls.append(stmt)
                 ddls.append("BUILD INDEX ON " + collection + " (" + bindexes + ")")
                 batches = int(ad[bv]["batches"]/(ncollections*nscopes))
@@ -199,8 +199,10 @@ def load_data(conn, workload):
     f = open(cfg["indexfile"], "w")
     for b in sorted(workload.keys()):
         bv = workload[b]
+        create_javascript_udf(b)
         for sc in range(0,len(bv["scopes"])) :
             sv = bv["scopes"][sc]
+            create_udf(conn, b, sv["bc"]+"."+sv["name"])
             for cc in range(0,len(sv["collections"])) :
                 cv = sv["collections"][cc]
                 cmd = "./load_data --host " + host + " --username Administrator --password password "
@@ -208,8 +210,22 @@ def load_data(conn, workload):
                 cmd += " --bucket " + b + " --scope " + sv["name"] + " --collection " + cv["name"]
                 systemcmd(cmd)
                 create_collection_indexes(conn, f, sv["collections"][cc])
+
     f.close()
         
+def create_javascript_udf(tenant) :
+    cmd = "curl -s -k -X POST "
+    cmd = cmd + cfg["host"]
+    cmd = cmd +  ":8093/evaluator/v1/libraries/"
+    cmd = cmd + tenant
+    cmd = cmd + " -u Administrator:password -H 'content-type: application/json'"
+    cmd = cmd +  " -d 'function udf(id) { return id}'"
+    systemcmd(cmd)
+
+def create_udf(conn, tenant, qc) :
+    stmt = {"statement":"CREATE OR REPLACE FUNCTION udf(id) LANGUAGE JAVASCRIPT AS 'udf' AT '" + tenant + "'", "query_context": qc}
+    n1ql_execute(conn, stmt , None)
+
 # prepare statements based on workload for all the buckets
 
 def prepare_stmts(conn, workload) :
@@ -416,8 +432,8 @@ if __name__ == "__main__":
     wfd = open(cfg["workloadfile"]+".txt", "w")
     #wfd = open(cfg["workloadfile"]+str(uuid.uuid4())+".txt", "w")
     workload = workload_init()
-    conn = n1ql_connection(cfg["host"])
     create_collections(workload)
+    conn = n1ql_connection(cfg["host"])
     load_data(conn, workload)
     wfd.write("START TIME : " + str(datetime.datetime.now()) + "\n")
     run_execute(conn, wfd, workload)
