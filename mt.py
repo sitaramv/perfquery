@@ -15,27 +15,26 @@ import multiprocessing
 
 
 cfg = {
-       "loaddata": False,                     # control bucket/scope/collection/index/data drop/creation/load
-       "execute": True,                       # control execute queries
-       "nthreads" : 3,                        # max number of client threads (might lowered by load setting)
-       "host": 'http://172.23.97.79',         # querynode host ip
-       "datareplicas": 0,                     # data replica setting
+       "loaddata": True,                      # control bucket/scope/collection/index/data drop/creation/load
+       "execute": False,                      # control execute queries
+       "nthreads" : 80,                       # max number of client threads (might lowered by load setting)
+       "host": 'http://ec2-35-80-34-7.us-west-2.compute.amazonaws.com',         # querynode host ip
+       "datareplicas": 2,                     # data replica setting
        "indexreplicas": 0,                    # data ndex replicas setting
-       "memory": 4096,                        # datanode memory  (divided by nbuckets)
-       "nbuckets": 4,                         # number of bucktes
+       "memory": 24576,                       # datanode memory  (divided by nbuckets)
+       "nbuckets": 20,                        # number of bucktes
        "nscopes"   : 2,                       # number of scopes per bucket
-       "dataweightdocs" : 1000,               # number of docs per each wieght
-#       "dataweightdocs" : 1000000,           # number of docs per each wieght
+       "dataweightdocs" : 1000000,            # number of docs per each wieght
        "dataweightpercollection" : 5,         # number of wieght per collection
        "nindexes": 1,                         # number of indexes per collection
        "naindexes": 1,                        # number of array indexes per collection
-       "workload" : "q1",                     # workload type (see workloads)
-       "load":"100",                          # load percent (see loads)
+       "workload" : "complex",                # workload type (see workloads)
+       "load":"90",                           # load percent (see loads)
        "batchsize": 100,                      # batchsize (i.e. qualified rows per query)
        "qualifiedbatches": 1,                 # number of batches (to increase qualified rows per query)
-       "duration": 10,                       # execution duration in seconds
+       "duration": 10,                        # execution duration in seconds
        "indexfile": "index.txt",              # index statements
-       "workloadfile": "workload",        # workload statements
+       "workloadfile": "workload",            # workload statements
        "indexes"  : [ "CREATE INDEX ix0 IF NOT EXISTS ON col0 (c0, f115) WITH {'defer_build': true, 'num_replica': indexreplicas }",
                       "CREATE INDEX ix1 IF NOT EXISTS ON col0 (c1, f115) WITH {'defer_build': true, 'num_replica': indexreplicas }",
                       "CREATE INDEX ix2 IF NOT EXISTS ON col0 (c2, f115) WITH {'defer_build': true, 'num_replica': indexreplicas }",
