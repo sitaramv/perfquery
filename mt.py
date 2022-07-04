@@ -17,13 +17,14 @@ import multiprocessing
 cfg = {
        "loaddata": False,                     # control bucket/scope/collection/index/data drop/creation/load
        "execute": True,                       # control execute queries
-       "nthreads" : 3,                       # max number of client threads (might lowered by load setting)
+       "nthreads" : 3,                        # max number of client threads (might lowered by load setting)
        "host": 'http://172.23.97.79',         # querynode host ip
-       "replicas": 0,                         # replica setting
+       "datareplicas": 0,                     # data replica setting
+       "indexreplicas": 0,                    # data ndex replicas setting
        "memory": 4096,                        # datanode memory  (divided by nbuckets)
        "nbuckets": 4,                         # number of bucktes
        "nscopes"   : 2,                       # number of scopes per bucket
-       "dataweightdocs" : 1000,           # number of docs per each wieght
+       "dataweightdocs" : 1000,               # number of docs per each wieght
 #       "dataweightdocs" : 1000000,           # number of docs per each wieght
        "dataweightpercollection" : 5,         # number of wieght per collection
        "nindexes": 1,                         # number of indexes per collection
@@ -32,20 +33,20 @@ cfg = {
        "load":"100",                          # load percent (see loads)
        "batchsize": 100,                      # batchsize (i.e. qualified rows per query)
        "qualifiedbatches": 1,                 # number of batches (to increase qualified rows per query)
-       "duration": 600,                       # execution duration in seconds
+       "duration": 10,                       # execution duration in seconds
        "indexfile": "index.txt",              # index statements
        "workloadfile": "workload",        # workload statements
-       "indexes"  : [ "CREATE INDEX ix0 IF NOT EXISTS ON col0 (c0, f115) WITH {'defer_build': true}",
-                      "CREATE INDEX ix1 IF NOT EXISTS ON col0 (c1, f115) WITH {'defer_build': true}",
-                      "CREATE INDEX ix2 IF NOT EXISTS ON col0 (c2, f115) WITH {'defer_build': true}",
-                      "CREATE INDEX ix3 IF NOT EXISTS ON col0 (c3, f115) WITH {'defer_build': true}",
-                      "CREATE INDEX ix4 IF NOT EXISTS ON col0 (c4, f115) WITH {'defer_build': true}"
+       "indexes"  : [ "CREATE INDEX ix0 IF NOT EXISTS ON col0 (c0, f115) WITH {'defer_build': true, 'num_replica': indexreplicas }",
+                      "CREATE INDEX ix1 IF NOT EXISTS ON col0 (c1, f115) WITH {'defer_build': true, 'num_replica': indexreplicas }",
+                      "CREATE INDEX ix2 IF NOT EXISTS ON col0 (c2, f115) WITH {'defer_build': true, 'num_replica': indexreplicas }",
+                      "CREATE INDEX ix3 IF NOT EXISTS ON col0 (c3, f115) WITH {'defer_build': true, 'num_replica': indexreplicas }",
+                      "CREATE INDEX ix4 IF NOT EXISTS ON col0 (c4, f115) WITH {'defer_build': true, 'num_replica': indexreplicas }"
                     ],
-       "aindexes"  : ["CREATE INDEX ixa0 IF NOT EXISTS ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac0) FOR v IN a1 END, f115) WITH {'defer_build': true}",
-                      "CREATE INDEX ixa1 IF NOT EXISTS ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac1) FOR v IN a1 END, f115) WITH {'defer_build': true}",
-                      "CREATE INDEX ixa2 IF NOT EXISTS ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac2) FOR v IN a1 END, f115) WITH {'defer_build': true}",
-                      "CREATE INDEX ixa3 IF NOT EXISTS ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac3) FOR v IN a1 END, f115) WITH {'defer_build': true}",
-                      "CREATE INDEX ixa4 IF NOT EXISTS ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac4) FOR v IN a1 END, f115) WITH {'defer_build': true}"
+       "aindexes"  : ["CREATE INDEX ixa0 IF NOT EXISTS ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac0) FOR v IN a1 END, f115) WITH {'defer_build': true, 'num_replica': indexreplicas }",
+                      "CREATE INDEX ixa1 IF NOT EXISTS ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac1) FOR v IN a1 END, f115) WITH {'defer_build': true, 'num_replica': indexreplicas }",
+                      "CREATE INDEX ixa2 IF NOT EXISTS ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac2) FOR v IN a1 END, f115) WITH {'defer_build': true, 'num_replica': indexreplicas }",
+                      "CREATE INDEX ixa3 IF NOT EXISTS ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac3) FOR v IN a1 END, f115) WITH {'defer_build': true, 'num_replica': indexreplicas }",
+                      "CREATE INDEX ixa4 IF NOT EXISTS ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac4) FOR v IN a1 END, f115) WITH {'defer_build': true, 'num_replica': indexreplicas }"
                     ],
        "aqueries" : {"q0": "SELECT META(d).id, d.f115, d.xxx FROM col0 AS d USE INDEX(`#seqentialscan`) WHERE d.c0 BETWEEN $start AND $end",
                      "q1": "SELECT META(d).id, d.f115, d.xxx FROM col0 AS d WHERE d.c0 BETWEEN $start AND $end",
@@ -117,7 +118,7 @@ def workload_init():
                       bindexes = bindexes + ", "
                    bindexes = bindexes + "ix" + str(iv)
 
-                   stmt = cfg["indexes"][iv].replace("col0", collection)
+                   stmt = cfg["indexes"][iv].replace("col0", collection).replace("indexreplicas",str(cfg["indexreplicas"]))
                    ddls.append(stmt)
 
                 for iv in range(0,cfg["naindexes"]) :
@@ -146,7 +147,7 @@ def create_collections(workload):
        return
 
     host = cfg["host"]
-    replicas = cfg["replicas"]
+    replicas = cfg["datareplicas"]
     
     systemcmd("curl -s -u Administrator:password " + host + ":8091/internalSettings -d 'maxBucketCount=80'")
     systemcmd("curl -s -u Administrator:password " + host + ":8091/settings/querySettings -d 'queryCompletedLimit=0'")
@@ -362,12 +363,16 @@ def result_finish(wfd, results) :
 
     for b in sorted(fbresult.keys()) :
          if fbresult[b]["count"] != 0:
-            fbresult[b]["avg"] = round(fbresult[b]["time"]/fbresult[b]["count"]*1000,3)
+            fbresult[b]["avg"] = round((fbresult[b]["time"]/fbresult[b]["count"])*1000,3)
          fbresult[b]["time"] = round(fbresult[b]["time"]*1000,3)
 
+    count = 0
+    total = 0.0
     for q in sorted(fqresult.keys()) :
          if fqresult[q]["count"] != 0:
-            fqresult[q]["avg"] = round(fqresult[q]["time"]/fqresult[q]["count"]*1000,3)
+            fqresult[q]["avg"] = round((fqresult[q]["time"]/fqresult[q]["count"])*1000,3)
+            count += fqresult[q]["count"]
+            total += fqresult[q]["time"]
          fqresult[q]["time"] = round(fqresult[q]["time"]*1000,3)
     
     wfd.write("\n\n ---------------BEGIN REQUESTS BY TENANT (ms)-----------\n")
@@ -379,6 +384,7 @@ def result_finish(wfd, results) :
     for q in sorted(fqresult.keys()) :
         wfd.write("    " + q.upper() + " " + json.dumps(fqresult[q]) + "\n")
     wfd.write("\n ---------------END REQUESTS BY QUERY-----------\n")
+    wfd.write("\n    TOTAL REQUESTS : " + str(count) +  "  TOTAL TIME(ms) : " + str(round(total*1000,3)) + " AVG TIME(ms) : " + str(round((total/count)*1000,3)) + "\n\n")
     
 def run_execute(conn, wfd, workload) :
     if not cfg["execute"]:
@@ -407,11 +413,12 @@ def run_execute(conn, wfd, workload) :
     result_finish(wfd, results) 
 
 if __name__ == "__main__":
+    wfd = open(cfg["workloadfile"]+".txt", "w")
+    #wfd = open(cfg["workloadfile"]+str(uuid.uuid4())+".txt", "w")
     workload = workload_init()
     conn = n1ql_connection(cfg["host"])
     create_collections(workload)
     load_data(conn, workload)
-    wfd = open(cfg["workloadfile"]+str(uuid.uuid4())+".txt", "w")
     wfd.write("START TIME : " + str(datetime.datetime.now()) + "\n")
     run_execute(conn, wfd, workload)
     wfd.write("END TIME : " + str(datetime.datetime.now()) + "\n")
