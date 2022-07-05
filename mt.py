@@ -17,10 +17,10 @@ import multiprocessing
 cfg = {
        "loaddata": True,                      # control bucket/scope/collection/index/data drop/creation/load
        "execute": False,                      # control execute queries
-       "nthreads" : 80,                       # max number of client threads (might lowered by load setting)
+       "nthreads" : 85,                       # max number of client threads (might lowered by load setting)
        "host": 'http://ec2-35-80-34-7.us-west-2.compute.amazonaws.com',         # querynode host ip
        "datareplicas": 2,                     # data replica setting
-       "indexreplicas": 0,                    # data ndex replicas setting
+       "indexreplicas": 1,                    # data ndex replicas setting
        "memory": 24576,                       # datanode memory  (divided by nbuckets)
        "nbuckets": 20,                        # number of bucktes
        "nscopes"   : 2,                       # number of scopes per bucket
@@ -41,13 +41,13 @@ cfg = {
                       "CREATE INDEX ix3 IF NOT EXISTS ON col0 (c3, f115) WITH {'defer_build': true, 'num_replica': indexreplicas }",
                       "CREATE INDEX ix4 IF NOT EXISTS ON col0 (c4, f115) WITH {'defer_build': true, 'num_replica': indexreplicas }"
                     ],
-       "aindexes"  : ["CREATE INDEX ixa0 IF NOT EXISTS ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac0) FOR v IN a1 END, f115) WITH {'defer_build': true, 'num_replica': indexreplicas }",
-                      "CREATE INDEX ixa1 IF NOT EXISTS ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac1) FOR v IN a1 END, f115) WITH {'defer_build': true, 'num_replica': indexreplicas }",
-                      "CREATE INDEX ixa2 IF NOT EXISTS ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac2) FOR v IN a1 END, f115) WITH {'defer_build': true, 'num_replica': indexreplicas }",
-                      "CREATE INDEX ixa3 IF NOT EXISTS ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac3) FOR v IN a1 END, f115) WITH {'defer_build': true, 'num_replica': indexreplicas }",
-                      "CREATE INDEX ixa4 IF NOT EXISTS ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac4) FOR v IN a1 END, f115) WITH {'defer_build': true, 'num_replica': indexreplicas }"
+       "aindexes"  : ["CREATE INDEX ixa0 IF NOT EXISTS ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac0) FOR v IN a1 END) WITH {'defer_build': true, 'num_replica': indexreplicas }",
+                      "CREATE INDEX ixa1 IF NOT EXISTS ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac1) FOR v IN a1 END) WITH {'defer_build': true, 'num_replica': indexreplicas }",
+                      "CREATE INDEX ixa2 IF NOT EXISTS ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac2) FOR v IN a1 END) WITH {'defer_build': true, 'num_replica': indexreplicas }",
+                      "CREATE INDEX ixa3 IF NOT EXISTS ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac3) FOR v IN a1 END) WITH {'defer_build': true, 'num_replica': indexreplicas }",
+                      "CREATE INDEX ixa4 IF NOT EXISTS ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac4) FOR v IN a1 END) WITH {'defer_build': true, 'num_replica': indexreplicas }"
                     ],
-       "aqueries" : {"q0": "SELECT META(d).id, d.f115, d.xxx FROM col0 AS d USE INDEX(`#seqentialscan`) WHERE d.c0 BETWEEN $start AND $end",
+       "aqueries" : {"q0": "SELECT META(d).id, d.f115, d.xxx FROM col0 AS d USE INDEX(`#sequential`) WHERE d.c0 BETWEEN $start AND $end",
                      "q1": "SELECT META(d).id, d.f115, d.xxx FROM col0 AS d WHERE d.c0 BETWEEN $start AND $end",
                      "q2": "SELECT META(d).id, d.f115, d.xxx FROM col0 AS d WHERE d.c0 BETWEEN $start AND $end ORDER BY d.c0 DESC LIMIT $limit",
                      "q3": "SELECT META(l).id, l.f115, l.xxx, r.yyy FROM col0 AS l JOIN col0 AS r USE HASH(BUILD) ON l.id = r.id WHERE l.c0 BETWEEN $start AND $end AND r.c0 BETWEEN $start AND $end",
@@ -64,27 +64,32 @@ cfg = {
                    "medium":{"q0":0, "q1":6, "q2":4, "q3":3, "q4":2, "q5":2, "q6":2, "q7":1, "q8":0, "q9":0},
                    "complex":{"q0":0, "q1":5, "q2":3, "q3":2, "q4":2, "q5":2, "q6":2, "q7":2, "q8":1, "q9":1}},
       "loads": { 
-              "dataweight":        {"free":1, "light":10, "moderate": 30, "heavy": 60, "superheavy": 60},
-              "querytenantweight": {"free":1, "light":2, "moderate": 3, "heavy": 4, "superheavy": 0}, #  1, 2*2, 3*6, 4*12
-#              "querytenantweight": {"free":1, "light":5, "moderate": 10, "heavy": 20, "superheavy": 0},
-              "50":{"total":20, "free": 3, "light":10, "moderate":5, "heavy":2, "superheavy":0 },
-              "90":{"total":20, "free": 0, "light":5, "moderate":10, "heavy":5, "superheavy":0 },
-              "100": {"total":4, "free": 1, "light":1, "moderate":1, "heavy":1, "superheavy":20},
+              "dataweight":        {"free":1, "light":10, "moderate": 30, "overheavy": 60, "superheavy": 120},
+#             "querytenantweight": {"free":1, "light":2, "moderate": 6, "overheavy": 12, "superheavy": 24}, # default no of collections 1, 2, 6, 12, 24
+              "50":{"free": 5, "light":8, "moderate":5, "overheavy":1, "superheavy":1 },
+              "90":{"free": 0, "light":5, "moderate":10, "overheavy":4, "superheavy":1 },
+              "100": {"free": 0, "light":0, "moderate":2, "overheavy":0, "superheavy":0 }
                }
       }
 
 def workload_init():
        load = cfg["loads"][cfg["load"]]
-       factor = int(cfg["nbuckets"]/load["total"])
-       tbatches = 0 
-       ad = []
+       ntenants = 0
        for k in sorted(load.keys()) :
-           if k == "total" or load[k] == 0 :
+           ntenants = ntenants + load[k]
+       factor = int(cfg["nbuckets"]/ntenants)
+       ad = []
+       ototal = 0
+       for k in sorted(load.keys()) :
+           if load[k] == 0 :
                continue
            batches = int((cfg["loads"]["dataweight"][k] * cfg["dataweightdocs"])/cfg["batchsize"])
            for nc in range(0, factor * load[k]) :
                 ad.append({"type":k, "batches": batches})
-                tbatches = tbatches + batches
+                if k == "overheavy" :
+                   ototal = ototal + 1
+                elif k == "superheavy" :
+                   ototal = ototal + 2
        batchespercollection = (cfg["dataweightpercollection"]*cfg["dataweightdocs"])/cfg["batchsize"]
        workload = {}
        memory = int(cfg["memory"] - 1024*cfg["nbuckets"])
@@ -93,7 +98,11 @@ def workload_init():
        for bv in range(0, cfg["nbuckets"]) :
           bc = "b" + str(bv) 
           workload[bc] = ad[bv].copy()
-          bmemory = int(memory*ad[bv]["batches"]/tbatches) + 1024
+          bmemory = 1024
+          if ad[bv]["type"] == "overheavy" :
+              bmemory = bmemory + int(memory/ototal)
+          elif ad[bv]["type"] == "superheavy" :
+              bmemory = bmemory + int(2*memory/ototal)
           workload[bc]["memory"] = bmemory
           scopes = []
           ncollections = int(ad[bv]["batches"]/batchespercollection)
@@ -103,6 +112,7 @@ def workload_init():
               ncollections = 1
           else :
               ncollections = int(ncollections/nscopes)
+          workload[bc]["ncollections"] = ncollections
           for sv in range(0,nscopes) :
              sc = "s" + str(sv)
              qc = bc + "." + sc
@@ -255,10 +265,16 @@ def prepare_stmts(conn, workload) :
 
 def tenant_distribution(nthreads, workload):
     tenants = []
+    if "querytenantweight" not in cfg["loads"].keys() :
+        for b in sorted(workload.keys()) :
+            for i in range (0, workload[b]["ncollections"]) :
+                tenants.append(b)
+        return tenants
+
     load = cfg["loads"][cfg["load"]]
     querytenantweight = cfg["loads"]["querytenantweight"]
     for k in sorted(load.keys()):
-        if k != "total" and load[k] > 0 :
+        if load[k] > 0 :
            for b in sorted(workload.keys()):
                if workload[b]["type"] == k :
                   if querytenantweight[k] == 0:
