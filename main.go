@@ -35,7 +35,7 @@ type Doc struct {
 }
 
 func loadColl(col *gocb.Collection, batches, batchSize int, document *Doc) {
-        options := &gocb.UpsertOptions{Timeout:10*time.Second}
+	options := &gocb.UpsertOptions{Timeout:10*time.Second, RetryStrategy:gocb.NewBestEffortRetryStrategy(nil)}
 	for j := 0; j < batches; j++ {
 		var wg sync.WaitGroup
 		for i := 0; i < batchSize; i++ {
@@ -58,6 +58,9 @@ func loadColl(col *gocb.Collection, batches, batchSize int, document *Doc) {
                                 }
 
 				_, err := col.Upsert(fmt.Sprintf("k%09d", k), &doc, options)
+				if err != nil {
+				        _, err = col.Upsert(fmt.Sprintf("k%09d", k), &doc, options)
+				}
 				if err != nil {
 					log.Printf("failed to upsert test data %v", err)
 				}

@@ -15,10 +15,12 @@ import multiprocessing
 
 
 cfg = {
+       "host": 'http://ec2-35-87-224-184.us-west-2.compute.amazonaws.com',         # querynode host ip
+       "workload" : "complex",                # workload type (see workloads)
+       "load":"90",                          # load percent (see loads)
        "loaddata": True,                      # control bucket/scope/collection/index/data drop/creation/load
        "execute": False,                      # control execute queries
        "nthreads" : 85,                       # max number of client threads (might lowered by load setting)
-       "host": 'http://ec2-35-87-224-184.us-west-2.compute.amazonaws.com',         # querynode host ip
        "datareplicas": 2,                     # data replica setting
        "indexreplicas": 1,                    # data ndex replicas setting
        "memory": 24576,                       # datanode memory  (divided by nbuckets)
@@ -28,8 +30,6 @@ cfg = {
        "dataweightpercollection" : 5,         # number of wieght per collection
        "nindexes": 1,                         # number of indexes per collection
        "naindexes": 1,                        # number of array indexes per collection
-       "workload" : "complex",                # workload type (see workloads)
-       "load":"90",                          # load percent (see loads)
        "batchsize": 100,                      # batchsize (i.e. qualified rows per query)
        "qualifiedbatches": 1,                 # number of batches (to increase qualified rows per query)
        "duration": 10,                        # execution duration in seconds

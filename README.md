@@ -62,3 +62,35 @@ go build -o load_data main.go
                     Also repeated the based on query factor number
     Each thread picks one of the prepare statement and execute it
 </pre>
+
+
+## AWS run:
+<pre>
+   Data Nodes : 3 - c6gd.4xlarge
+                Default 8 GB storage gp3
+                Add Another storage 500GB  gp3
+                    IOPS 15,000
+                    Transfer Rate 1000 MiBs
+
+   Index Nodes: 2 - c6gd.4xlarge
+                Default 8 GB storage gp3
+                Add Another storage 500GB  gp3
+                    IOPS 15,000
+                    Transfer Rate 1000 MiBs
+
+   Query Nodes: 1 c6gd.4xlarge
+                Default 30 GB storage gp3
+
+   Test Nodes: 1 c6gd.4xlarge
+                Default 30 GB storage gp3
+
+   Download product file, aws key file to current directory
+   Update ec2.sh line hosts, servicenames, keyfile, rpm file
+   ./ec2.sh -a -k <keyfile> -r <rpm file>
+
+   login to test machine
+   cd perfquery
+   Update  cfg object host (query host) and other settings if needed
+   python mt.py
+
+</pre>
