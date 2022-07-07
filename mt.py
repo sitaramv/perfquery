@@ -18,7 +18,7 @@ cfg = {
        "loaddata": True,                      # control bucket/scope/collection/index/data drop/creation/load
        "execute": False,                      # control execute queries
        "nthreads" : 85,                       # max number of client threads (might lowered by load setting)
-       "host": 'http://172.23.97.79',         # querynode host ip
+       "host": 'http://ec2-35-87-224-184.us-west-2.compute.amazonaws.com',         # querynode host ip
        "datareplicas": 2,                     # data replica setting
        "indexreplicas": 1,                    # data ndex replicas setting
        "memory": 24576,                       # datanode memory  (divided by nbuckets)
@@ -36,30 +36,30 @@ cfg = {
        "ncores": 16,                          # number of query service cores
        "indexfile": "index.txt",              # index statements
        "workloadfile": "workload",            # workload statements
-       "backupdir":"/tmp/backups",            # backup dir
+       "backupdir":"/data/backups",           # backup dir
        "usebackup":True,                      # use backup/restore vs load_data
-       "indexes"  : [ "CREATE INDEX ix0 IF NOT EXISTS ON col0 (c0, f115) WITH {'defer_build': true, 'num_replica': indexreplicas }",
-                      "CREATE INDEX ix1 IF NOT EXISTS ON col0 (c1, f115) WITH {'defer_build': true, 'num_replica': indexreplicas }",
-                      "CREATE INDEX ix2 IF NOT EXISTS ON col0 (c2, f115) WITH {'defer_build': true, 'num_replica': indexreplicas }",
-                      "CREATE INDEX ix3 IF NOT EXISTS ON col0 (c3, f115) WITH {'defer_build': true, 'num_replica': indexreplicas }",
-                      "CREATE INDEX ix4 IF NOT EXISTS ON col0 (c4, f115) WITH {'defer_build': true, 'num_replica': indexreplicas }"
+       "indexes"  : [ "CREATE INDEX ix0 IF NOT EXISTS ON col00 (c0, f115) WITH {'defer_build': true, 'num_replica': indexreplicas }",
+                      "CREATE INDEX ix1 IF NOT EXISTS ON col00 (c1, f115) WITH {'defer_build': true, 'num_replica': indexreplicas }",
+                      "CREATE INDEX ix2 IF NOT EXISTS ON col00 (c2, f115) WITH {'defer_build': true, 'num_replica': indexreplicas }",
+                      "CREATE INDEX ix3 IF NOT EXISTS ON col00 (c3, f115) WITH {'defer_build': true, 'num_replica': indexreplicas }",
+                      "CREATE INDEX ix4 IF NOT EXISTS ON col00 (c4, f115) WITH {'defer_build': true, 'num_replica': indexreplicas }"
                     ],
-       "aindexes"  : ["CREATE INDEX ixa0 IF NOT EXISTS ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac0) FOR v IN a1 END) WITH {'defer_build': true, 'num_replica': indexreplicas }",
-                      "CREATE INDEX ixa1 IF NOT EXISTS ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac1) FOR v IN a1 END) WITH {'defer_build': true, 'num_replica': indexreplicas }",
-                      "CREATE INDEX ixa2 IF NOT EXISTS ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac2) FOR v IN a1 END) WITH {'defer_build': true, 'num_replica': indexreplicas }",
-                      "CREATE INDEX ixa3 IF NOT EXISTS ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac3) FOR v IN a1 END) WITH {'defer_build': true, 'num_replica': indexreplicas }",
-                      "CREATE INDEX ixa4 IF NOT EXISTS ON col0 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac4) FOR v IN a1 END) WITH {'defer_build': true, 'num_replica': indexreplicas }"
+       "aindexes"  : ["CREATE INDEX ixa0 IF NOT EXISTS ON col00 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac0) FOR v IN a1 END) WITH {'defer_build': true, 'num_replica': indexreplicas }",
+                      "CREATE INDEX ixa1 IF NOT EXISTS ON col00 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac1) FOR v IN a1 END) WITH {'defer_build': true, 'num_replica': indexreplicas }",
+                      "CREATE INDEX ixa2 IF NOT EXISTS ON col00 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac2) FOR v IN a1 END) WITH {'defer_build': true, 'num_replica': indexreplicas }",
+                      "CREATE INDEX ixa3 IF NOT EXISTS ON col00 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac3) FOR v IN a1 END) WITH {'defer_build': true, 'num_replica': indexreplicas }",
+                      "CREATE INDEX ixa4 IF NOT EXISTS ON col00 (ALL ARRAY FLATTEN_KEYS(v.aid, v.ac4) FOR v IN a1 END) WITH {'defer_build': true, 'num_replica': indexreplicas }"
                     ],
-       "aqueries" : {"q0": "SELECT META(d).id, d.f115, d.xxx FROM col0 AS d USE INDEX(`#sequential`) WHERE d.c0 BETWEEN $start AND $end",
-                     "q1": "SELECT META(d).id, d.f115, d.xxx FROM col0 AS d WHERE d.c0 BETWEEN $start AND $end",
-                     "q2": "SELECT META(d).id, d.f115, d.xxx FROM col0 AS d WHERE d.c0 BETWEEN $start AND $end ORDER BY d.c0 DESC LIMIT $limit",
-                     "q3": "SELECT META(l).id, l.f115, l.xxx, r.yyy FROM col0 AS l JOIN col0 AS r USE HASH(BUILD) ON l.id = r.id WHERE l.c0 BETWEEN $start AND $end AND r.c0 BETWEEN $start AND $end",
-                     "q4": "SELECT g1, COUNT(1) AS cnt FROM col0 AS d WHERE d.c0 BETWEEN $start AND $end GROUP BY IMOD(d.id,10) AS g1 ORDER BY g1",
-                     "q5": "SELECT META(d).id, d.f115, d.xxx FROM col0 AS d WHERE ANY v IN d.a1 SATISFIES v.ac0 BETWEEN $start AND $end AND v.aid = 2 END",
-                     "q6": "WITH cte AS (SELECT RAW t FROM col0 AS t WHERE t.c0 BETWEEN $start AND $end) SELECT META(l).id, l.f115, l.xxx, r.yyy FROM col0 AS l JOIN cte AS r ON l.id = r.id WHERE l.c0 BETWEEN $start AND $end AND r.c0 BETWEEN $start AND $end",
-                     "q7": "SELECT META(d).id, d.f115, d.xxx FROM col0 AS d UNNEST d.a1 AS u WHERE u.ac0 BETWEEN $start AND $end AND u.aid = 1",
-                     "q8": "UPDATE col0 AS d SET d.comment = d.comment WHERE d.c0 BETWEEN $start AND $end",
-                     "q9": "SELECT META(d).id, d.f115, d.xxx FROM col0 AS d WHERE d.c0 BETWEEN $start AND $end AND udf(d.c0) = d.c0"
+       "aqueries" : {"q0": "SELECT META(d).id, d.f115, d.xxx FROM col00 AS d USE INDEX(`#sequential`) WHERE d.c0 BETWEEN $start AND $end",
+                     "q1": "SELECT META(d).id, d.f115, d.xxx FROM col00 AS d WHERE d.c0 BETWEEN $start AND $end",
+                     "q2": "SELECT META(d).id, d.f115, d.xxx FROM col00 AS d WHERE d.c0 BETWEEN $start AND $end ORDER BY d.c0 DESC LIMIT $limit",
+                     "q3": "SELECT META(l).id, l.f115, l.xxx, r.yyy FROM col00 AS l JOIN col00 AS r USE HASH(BUILD) ON l.id = r.id WHERE l.c0 BETWEEN $start AND $end AND r.c0 BETWEEN $start AND $end",
+                     "q4": "SELECT g1, COUNT(1) AS cnt FROM col00 AS d WHERE d.c0 BETWEEN $start AND $end GROUP BY IMOD(d.id,10) AS g1 ORDER BY g1",
+                     "q5": "SELECT META(d).id, d.f115, d.xxx FROM col00 AS d WHERE ANY v IN d.a1 SATISFIES v.ac0 BETWEEN $start AND $end AND v.aid = 2 END",
+                     "q6": "WITH cte AS (SELECT RAW t FROM col00 AS t WHERE t.c0 BETWEEN $start AND $end) SELECT META(l).id, l.f115, l.xxx, r.yyy FROM col00 AS l JOIN cte AS r ON l.id = r.id WHERE l.c0 BETWEEN $start AND $end AND r.c0 BETWEEN $start AND $end",
+                     "q7": "SELECT META(d).id, d.f115, d.xxx FROM col00 AS d UNNEST d.a1 AS u WHERE u.ac0 BETWEEN $start AND $end AND u.aid = 1",
+                     "q8": "UPDATE col00 AS d SET d.comment = d.comment WHERE d.c0 BETWEEN $start AND $end",
+                     "q9": "SELECT META(d).id, d.f115, d.xxx FROM col00 AS d WHERE d.c0 BETWEEN $start AND $end AND udf(d.c0) = d.c0"
                     },
       "workloads":{"q0": {"q0":20}, "q1": {"q1":20}, "q2": {"q2":20}, "q3": {"q3":20}, "q4": {"q4":20},
                    "q5": {"q5":20}, "q6": {"q6":20}, "q7": {"q7":20}, "q8": {"q8":20}, "q9": {"q9":20},
@@ -99,7 +99,7 @@ def workload_init():
        if memory < 0 :
            memory = 0
        for bv in range(0, cfg["nbuckets"]) :
-          bc = "b" + str(bv) 
+          bc = "b" + str(bv).zfill(2)
           workload[bc] = ad[bv].copy()
           bmemory = 1024
           if ad[bv]["type"] == "overheavy" :
@@ -117,11 +117,11 @@ def workload_init():
               ncollections = int(ncollections/nscopes)
           workload[bc]["ncollections"] = ncollections
           for sv in range(0,nscopes) :
-             sc = "s" + str(sv)
+             sc = "s" + str(sv).zfill(2)
              qc = bc + "." + sc
              collections = []
              for cv in range(0,ncollections) :
-                collection = "col" + str(cv)
+                collection = "col" + str(cv).zfill(2)
                 bindexes = ""
 
                 ddls = []
@@ -130,7 +130,7 @@ def workload_init():
                       bindexes = bindexes + ", "
                    bindexes = bindexes + "ix" + str(iv)
 
-                   stmt = cfg["indexes"][iv].replace("col0", collection).replace("indexreplicas",str(cfg["indexreplicas"]))
+                   stmt = cfg["indexes"][iv].replace("col00", collection).replace("indexreplicas",str(cfg["indexreplicas"]))
                    ddls.append(stmt)
 
                 for iv in range(0,cfg["naindexes"]) :
@@ -138,7 +138,7 @@ def workload_init():
                       bindexes = bindexes + "," 
                    bindexes = bindexes + "ixa" + str(iv)
 
-                   stmt = cfg["aindexes"][iv].replace("col0", collection).replace("indexreplicas",str(cfg["indexreplicas"]))
+                   stmt = cfg["aindexes"][iv].replace("col00", collection).replace("indexreplicas",str(cfg["indexreplicas"]))
                    ddls.append(stmt)
                 ddls.append("BUILD INDEX ON " + collection + " (" + bindexes + ")")
                 batches = int(ad[bv]["batches"]/(ncollections*nscopes))
@@ -225,7 +225,7 @@ def load_data(conn, workload):
                     systemcmd(cmd)
                     if cfg["usebackup"] and bv["type"] != "free" :
                         backupcollection = b + "." + sv["name"] + "." + cv["name"]
-                        systemcmd("/bin/rm -rf " + cfg["backupdir"])
+                        systemcmd("/bin/rm -rf " + cfg["backupdir"] + "/*")
                         cmd = "/opt/couchbase/bin/cbbackupmgr config --archive " + cfg["backupdir"]
                         cmd += " --repo default --disable-bucket-config --include-data " + backupcollection
                         systemcmd(cmd)
@@ -269,7 +269,7 @@ def prepare_stmts(conn, workload) :
                 for k in sorted(queryworkloads.keys()):
                    if queryworkloads[k] == 0 :
                       continue
-                   stmt = cfg["aqueries"][k].replace("col0", cv["name"])
+                   stmt = cfg["aqueries"][k].replace("col00", cv["name"])
                    nindexes = cfg["nindexes"]
                    tximplicit = "UPDATE" in stmt
                    if "ac0" in stmt :
