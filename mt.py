@@ -477,7 +477,7 @@ def result_finish(wfd, results) :
     wfd.write("\n ---------------END REQUESTS BY QUERY-----------\n\n")
     wfd.write("    TOTAL REQUESTS : " + str(count) +  ",  TOTAL TIME(ms) : " + str(round(total*1000,3)) + ", AVG TIME(ms) : " + str(round((total/count)*1000,3)) + "\n")
     wfd.write("    CQPS : " + str(cqps) + " CQPSPC : " + str(cqpspc) + "\n")
-    wfd.write("    SQPS : " + str(round(count/duration),3) + " SQPSPC : " + str(round(count/(duration*cfg["ncores"])),3) + "\n\n")
+    wfd.write("    SQPS : " + str(round(count/duration,3)) + " SQPSPC : " + str(round(count/(duration*cfg["ncores"]),3)) + "\n\n")
     
 def run_execute(conn, wfd, workload) :
     if not cfg["execute"]:
