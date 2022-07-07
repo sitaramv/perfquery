@@ -6,6 +6,7 @@ rpmfile="couchbase-server-enterprise.rpm"
 kfile="sitaram-oregon.pem"
 aws=false
 shell=false
+shelln=0
 install=false
 cluster=false
 lvm=false
@@ -25,6 +26,8 @@ while [[ $# -gt 0 ]]; do
       ;;
     -s|--shell)
       shell=true
+      shift
+      shelln=$1
       shift
       ;;
     -i|--install)
@@ -166,9 +169,8 @@ if [ "$shell" == true ] ; then
          echo "$kfile not present "
 	 exit 1
     fi
-    doshell
+    doshell $shelln
 fi
-
 
 if [ "$lvm" == true ] ; then
     dolvm

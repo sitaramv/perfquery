@@ -15,7 +15,7 @@ import multiprocessing
 
 
 cfg = {
-       "host": 'http://ec2-35-87-224-184.us-west-2.compute.amazonaws.com',         # querynode host ip
+       "host": 'http://ec2-44-235-91-186.us-west-2.compute.amazonaws.com',         # querynode host ip
        "workload" : "complex",                # workload type (see workloads)
        "load":"90",                          # load percent (see loads)
        "loaddata": True,                      # control bucket/scope/collection/index/data drop/creation/load
@@ -32,7 +32,7 @@ cfg = {
        "naindexes": 1,                        # number of array indexes per collection
        "batchsize": 100,                      # batchsize (i.e. qualified rows per query)
        "qualifiedbatches": 1,                 # number of batches (to increase qualified rows per query)
-       "duration": 10,                        # execution duration in seconds
+       "duration": 600,                       # execution duration in seconds
        "ncores": 16,                          # number of query service cores
        "indexfile": "index.txt",              # index statements
        "workloadfile": "workload",            # workload statements
@@ -92,7 +92,7 @@ def workload_init():
                 if k == "overheavy" :
                    ototal = ototal + 1
                 elif k == "superheavy" :
-                   ototal = ototal + 2
+                   ototal = ototal + 4
        batchespercollection = (cfg["dataweightpercollection"]*cfg["dataweightdocs"])/cfg["batchsize"]
        workload = {}
        memory = int(cfg["memory"] - 1024*cfg["nbuckets"])
@@ -105,7 +105,7 @@ def workload_init():
           if ad[bv]["type"] == "overheavy" :
               bmemory = bmemory + int(memory/ototal)
           elif ad[bv]["type"] == "superheavy" :
-              bmemory = bmemory + int(2*memory/ototal)
+              bmemory = bmemory + 4*int(memory/ototal)
           workload[bc]["memory"] = bmemory
           scopes = []
           ncollections = int(ad[bv]["batches"]/batchespercollection)
@@ -447,24 +447,25 @@ def result_finish(wfd, results) :
          if fbresult[b]["count"] != 0:
             fbresult[b]["avg"] = round((fbresult[b]["time"]/fbresult[b]["count"])*1000,3)
          fbresult[b]["time"] = round(fbresult[b]["time"]*1000,3)
-         fbresult[b]["qps"] = round(fbresult[b]["count"]*1000/fbresult[b]["time"], 3)
-         fbresult[b]["qpspc"] = round(fbresult[b]["qps"]/cfg["ncores"], 3)
+         fbresult[b]["cqps"] = round(fbresult[b]["count"]*1000/fbresult[b]["time"], 3)
+         fbresult[b]["cqpspc"] = round(fbresult[b]["cqps"]/cfg["ncores"], 3)
 
     count = 0
     total = 0.0
-    qps = 0.0
-    qpspc = 0.0
+    cqps = 0.0
+    cqpspc = 0.0
     for q in sorted(fqresult.keys()) :
          if fqresult[q]["count"] != 0:
             fqresult[q]["avg"] = round((fqresult[q]["time"]/fqresult[q]["count"])*1000,3)
             count += fqresult[q]["count"]
             total += fqresult[q]["time"]
          fqresult[q]["time"] = round(fqresult[q]["time"]*1000,3)
-         fqresult[q]["qps"] = round(fqresult[q]["count"]*1000/fqresult[q]["time"], 3)
-         fqresult[q]["qpspc"] = round(fqresult[q]["qps"]/cfg["ncores"], 3)
-         qps += fqresult[q]["qps"]
-         qpspc += fqresult[q]["qpspc"]
+         fqresult[q]["cqps"] = round(fqresult[q]["count"]*1000/fqresult[q]["time"], 3)
+         fqresult[q]["cqpspc"] = round(fqresult[q]["cqps"]/cfg["ncores"], 3)
+         cqps += fqresult[q]["cqps"]
+         cqpspc += fqresult[q]["cqpspc"]
     
+    duration = cfg["duration"]
     wfd.write("\n\n ---------------BEGIN REQUESTS BY TENANT (ms)-----------\n")
     for b in sorted(fbresult.keys()) :
         wfd.write("    " + b.upper() + " " + json.dumps(fbresult[b]) + "\n")
@@ -473,8 +474,10 @@ def result_finish(wfd, results) :
     wfd.write("\n ---------------BEGIN REQUESTS BY QUERY (ms)-----------\n")
     for q in sorted(fqresult.keys()) :
         wfd.write("    " + q.upper() + " " + json.dumps(fqresult[q]) + "\n")
-    wfd.write("\n ---------------END REQUESTS BY QUERY-----------\n")
-    wfd.write("\n    TOTAL REQUESTS : " + str(count) +  "  TOTAL TIME(ms) : " + str(round(total*1000,3)) + " AVG TIME(ms) : " + str(round((total/count)*1000,3)) +  " QPS : " + str(qps) + " QPSPC : " + str(qpspc) + "\n\n")
+    wfd.write("\n ---------------END REQUESTS BY QUERY-----------\n\n")
+    wfd.write("    TOTAL REQUESTS : " + str(count) +  ",  TOTAL TIME(ms) : " + str(round(total*1000,3)) + ", AVG TIME(ms) : " + str(round((total/count)*1000,3)) + "\n")
+    wfd.write("    CQPS : " + str(cqps) + " CQPSPC : " + str(cqpspc) + "\n")
+    wfd.write("    SQPS : " + str(round(count/duration),3) + " SQPSPC : " + str(round(count/(duration*cfg["ncores"])),3) + "\n\n")
     
 def run_execute(conn, wfd, workload) :
     if not cfg["execute"]:
