@@ -386,8 +386,12 @@ def run_tid(tid, starttime, duration, tenants, workload, result, debug):
              params = {"$start":stmt['$start'], "$end": stmt['$end'], "$limit": stmt['$limit'], "bucket": bname, "qtype": sq["qtype"]}
              print ("tid:" , tid, "loop: ", i, json.JSONEncoder().encode(body["metrics"]), params)
 
-         result[bname][sq["qtype"]]["count"] = result[bname][sq["qtype"]]["count"] + 1
-         result[bname][sq["qtype"]]["time"] = result[bname][sq["qtype"]]["time"] + (t1-t0)
+         result[bname][sq["qtype"]]["count"] += 1
+         result[bname][sq["qtype"]]["time"] += (t1-t0)
+         if "computeUnits" in body.keys() :
+             cu = body["computeUnits"]
+             for k in cu.keys() :
+                  result[bname][sq["qtype"]]["computeUnits"][k] += cu[k]
 
     return result
 
@@ -420,7 +424,8 @@ def result_init(tenants, workload):
         results[b] = {}
         for i in range(0, len(workload[b]["prepareds"])) :
             sd = workload[b]["prepareds"][i]
-            results[b][sd["qtype"]] = {"count":0, "time": 0}
+            results[b][sd["qtype"]] = {"count":0, "time": 0, "computeUnits":{"queryCU":0, "jsCU":0, "gsiRU":0, "ftsRU":0, "kvRU":0, "kvWU": 0}}
+
     return results 
 
 def result_finish(wfd, results) :
@@ -432,14 +437,18 @@ def result_finish(wfd, results) :
         for b in sorted(result.keys()):
             for q in sorted(result[b].keys()):
                 if q in sorted(fqresult.keys()):
-                    fqresult[q]["count"] = fqresult[q]["count"] + result[b][q]["count"]
-                    fqresult[q]["time"] = fqresult[q]["time"] + result[b][q]["time"]
+                    fqresult[q]["count"] += result[b][q]["count"]
+                    fqresult[q]["time"] += result[b][q]["time"]
+                    for k in fqresult[q]["computeUnits"].keys() :
+                        fqresult[q]["computeUnits"][k] += result[b][q]["computeUnits"][k]
                 else :
                     fqresult[q] = result[b][q].copy()
             
                 if b in sorted(fbresult.keys()) :
-                    fbresult[b]["count"] = fbresult[b]["count"] + result[b][q]["count"]
-                    fbresult[b]["time"] = fbresult[b]["time"] + result[b][q]["time"]
+                    fbresult[b]["count"] += result[b][q]["count"]
+                    fbresult[b]["time"] += result[b][q]["time"]
+                    for k in fbresult[b]["computeUnits"].keys() :
+                        fbresult[b]["computeUnits"][k] += result[b][q]["computeUnits"][k]
                 else :
                     fbresult[b] = result[b][q].copy()
 
@@ -454,11 +463,14 @@ def result_finish(wfd, results) :
     total = 0.0
     cqps = 0.0
     cqpspc = 0.0
+    cu = {"queryCU":0, "jsCU":0, "gsiRU":0, "ftsRU":0, "kvRU":0, "kvWU": 0}
     for q in sorted(fqresult.keys()) :
          if fqresult[q]["count"] != 0:
             fqresult[q]["avg"] = round((fqresult[q]["time"]/fqresult[q]["count"])*1000,3)
             count += fqresult[q]["count"]
             total += fqresult[q]["time"]
+         for k in cu.keys() :
+             cu[k] += fqresult[q]["computeUnits"][k]
          fqresult[q]["time"] = round(fqresult[q]["time"]*1000,3)
          fqresult[q]["cqps"] = round(fqresult[q]["count"]*1000/fqresult[q]["time"], 3)
          fqresult[q]["cqpspc"] = round(fqresult[q]["cqps"]/cfg["ncores"], 3)
@@ -477,7 +489,8 @@ def result_finish(wfd, results) :
     wfd.write("\n ---------------END REQUESTS BY QUERY-----------\n\n")
     wfd.write("    TOTAL REQUESTS : " + str(count) +  ",  TOTAL TIME(ms) : " + str(round(total*1000,3)) + ", AVG TIME(ms) : " + str(round((total/count)*1000,3)) + "\n")
     wfd.write("    CQPS : " + str(cqps) + " CQPSPC : " + str(cqpspc) + "\n")
-    wfd.write("    SQPS : " + str(round(count/duration,3)) + " SQPSPC : " + str(round(count/(duration*cfg["ncores"]),3)) + "\n\n")
+    wfd.write("    SQPS : " + str(round(count/duration,3)) + " SQPSPC : " + str(round(count/(duration*cfg["ncores"]),3)) + "\n")
+    wfd.write("    COMPUTE UNITS : " + json.dumps(cu) + "\n\n")
     
 def run_execute(conn, wfd, workload) :
     if not cfg["execute"]:

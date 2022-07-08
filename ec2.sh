@@ -1,7 +1,7 @@
 #!/bin/bash
 
-hosts=(ec2-44-234-51-210.us-west-2.compute.amazonaws.com ec2-34-222-183-193.us-west-2.compute.amazonaws.com  ec2-44-234-150-1.us-west-2.compute.amazonaws.com ec2-35-82-12-3.us-west-2.compute.amazonaws.com ec2-44-235-91-186.us-west-2.compute.amazonaws.com ec2-35-88-7-28.us-west-2.compute.amazonaws.com)
-servicenames=(data data data index query test)
+hosts=(ec2-35-84-1-84.us-west-2.compute.amazonaws.com ec2-35-87-215-195.us-west-2.compute.amazonaws.com ec2-35-83-254-184.us-west-2.compute.amazonaws.com ec2-44-230-202-74.us-west-2.compute.amazonaws.com ec2-35-86-219-126.us-west-2.compute.amazonaws.com ec2-35-87-221-144.us-west-2.compute.amazonaws.com ec2-35-84-139-76.us-west-2.compute.amazonaws.com)
+servicenames=(data data data index index query test)
 rpmfile="couchbase-server-enterprise.rpm"
 kfile="sitaram-oregon.pem"
 aws=false
