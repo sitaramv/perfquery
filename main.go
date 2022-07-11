@@ -13,6 +13,7 @@ import (
 )
 
 type Ndoc struct {
+	Apos      int   `json:"apos"`
 	Aid      int    `json:"aid"`
 	Ac0      int    `json:"ac0"`
 	Ac1      int    `json:"ac1"`
@@ -23,6 +24,7 @@ type Ndoc struct {
 
 type Doc struct {
 	Id      int    `json:"id"`
+	Cid     int    `json:"cid"`
 	C0      int    `json:"c0"`
 	C1      int    `json:"c1"`
 	C2      int    `json:"c2"`
@@ -43,13 +45,15 @@ func loadColl(col *gocb.Collection, batches, batchSize int, document *Doc) {
 			go func(id, k, id1 int) {
 				doc := *document
 				doc.Id = id1
+				doc.Cid = id1
 				doc.C0 = id
 				doc.C1 = id
 				doc.C2 = id
 				doc.C3 = id
 				doc.C4 = id
                                 for pos:= 0; pos <  len(doc.A1); pos ++ {
-				    doc.A1[pos].Aid = pos
+				    doc.A1[pos].Apos = pos
+				    doc.A1[pos].Aid = id1
 				    doc.A1[pos].Ac0 = id
 				    doc.A1[pos].Ac1 = id
 				    doc.A1[pos].Ac2 = id
@@ -103,7 +107,7 @@ func genTestData(addr, user, pass , bname, sname, cname string, batches, batchSi
 	for i := 0; i < 245; i++ {
 		f245.WriteString("1")
 	}
-	for i := 0; i < 425; i++ {
+	for i := 0; i < 400; i++ {
 		comment.WriteString("-")
 	}
 	document := &Doc{
