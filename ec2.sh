@@ -1,6 +1,6 @@
 #!/bin/bash
 
-hosts=(ec2-35-87-172-94.us-west-2.compute.amazonaws.com ec2-44-234-65-200.us-west-2.compute.amazonaws.com ec2-35-88-12-175.us-west-2.compute.amazonaws.com ec2-35-87-229-129.us-west-2.compute.amazonaws.com ec2-35-86-223-53.us-west-2.compute.amazonaws.com ec2-35-86-72-157.us-west-2.compute.amazonaws.com ec2-35-87-196-2.us-west-2.compute.amazonaws.com)
+hosts=(ec2-35-84-193-75.us-west-2.compute.amazonaws.com ec2-35-84-142-195.us-west-2.compute.amazonaws.com ec2-35-86-190-17.us-west-2.compute.amazonaws.com ec2-44-242-147-169.us-west-2.compute.amazonaws.com ec2-35-87-163-212.us-west-2.compute.amazonaws.com ec2-34-223-103-134.us-west-2.compute.amazonaws.com ec2-35-84-182-77.us-west-2.compute.amazonaws.com)
 servicenames=(data data data index index query test)
 rpmfile="couchbase-server-enterprise.rpm"
 kfile="sitaram-oregon.pem"
@@ -139,9 +139,9 @@ dolvm() {
 }
 
 doinstall() {
-     yum -y install ncurses-compat-libs
-     yum -y install git
-     yum -y install go
+     yum -y install ncurses-compat-libs > /tmp/install.log
+     yum -y install git >> /tmp/install.log
+     yum -y install go >> /tmp/install.log
      rpm --install $rpmfile
      (umask 0; mkdir -p /data/backups /data/data; chown -R couchbase:couchbase /data; chmod 777 /data/backups)
      sudo -u ec2-user git clone https://github.com/sitaramv/perfquery.git

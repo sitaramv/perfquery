@@ -15,10 +15,10 @@ import multiprocessing
 
 
 cfg = {
-       "host": 'http://ec2-35-86-72-157.us-west-2.compute.amazonaws.com',         # querynode host ip
+       "host": 'http://ec2-34-223-103-134.us-west-2.compute.amazonaws.com',       # querynode host ip
        "workload" : "complex",                # workload type (see workloads)
        "load":"90",                          # load percent (see loads)
-       "loaddata": True,                      # control bucket/scope/collection/index/data drop/creation/load
+       "loaddata": False,                      # control bucket/scope/collection/index/data drop/creation/load
        "execute": False,                      # control execute queries
        "nthreads" : 85,                       # max number of client threads (might lowered by load setting)
        "datareplicas": 2,                     # data replica setting
@@ -40,6 +40,7 @@ cfg = {
        "workloadfile": "workload",            # workload statements
        "backupdir":"/data/backups",           # backup dir
        "usebackup": False,                    # use backup/restore vs load_data
+       "staged": True,                       # load using staged approach
        "storage": {"type":"magma", "minsize":1024},  # storage type and minimum size 
       #"storage": {"type":"couchstore", "minsize":100},
        "speical": "",                         # "changereplica", "rebuildindexes"
@@ -89,6 +90,10 @@ cfg = {
 
 def workload_init():
        load = cfg["loads"][cfg["load"]]
+       staged = cfg["staged"]
+       loadoverhead = cfg["loadoverhead"]
+       if not staged :
+           loadoverhead  = 0
        ntenants = 0
        tbatches = 0
        for k in sorted(load.keys()) :
@@ -110,7 +115,7 @@ def workload_init():
        batchespercollection = (cfg["dataweightpercollection"]*cfg["dataweightdocs"])/cfg["batchsize"]
        workload = {}
        minsize = cfg["storage"]["minsize"]
-       memory = int(cfg["memory"] - minsize*cfg["nbuckets"] - cfg["loadoverhead"])
+       memory = int(cfg["memory"] - minsize*cfg["nbuckets"] - loadoverhead)
        if memory < 0 :
            memory = 0
        for bv in range(0, cfg["nbuckets"]) :
@@ -125,7 +130,7 @@ def workload_init():
           else :
               bmemory + int(memory*ad[bv]["batches"]/tbatches)
           workload[bc]["memory"] = bmemory
-          workload[bc]["loadoverhead"] = cfg["loadoverhead"]
+          workload[bc]["loadoverhead"] = loadoverhead
           scopes = []
           ncollections = int(ad[bv]["batches"]/batchespercollection)
           nscopes = cfg["nscopes"]
@@ -200,8 +205,7 @@ def bucket_memory(workload, bname, flag):
             cmd = "/opt/couchbase/bin/couchbase-cli bucket-edit -c " + host + " -u Administrator -p password --bucket " + bname 
             cmd += " --bucket-ramsize " + str(workload[bname]["memory"] + overhead)
             systemcmd(cmd)
-            time.sleep(3)
-
+            time.sleep(10)
 
 # bucket/scope/collection re-creation
 
@@ -211,6 +215,9 @@ def create_collections(workload):
 
     host = cfg["host"]
     replicas = cfg["datareplicas"]
+    staged = cfg["staged"]
+    if staged :
+        replicas = 0
     
     systemcmd("curl -s -u Administrator:password " + host + ":8091/internalSettings -d 'maxBucketCount=80'")
     systemcmd("curl -s -u Administrator:password " + host + ":8091/settings/querySettings -d 'queryCompletedLimit=0'")
@@ -302,7 +309,8 @@ def rebuild_indexes(conn, workload, asnew, f):
         create_collection_indexes(conn, cv, indextype, False, False, True, f)
         bcolletions.append(cv)
         n += 1
-        if n % 5 == 0 :
+        if n == 5 :
+            n = 0
             wait_build_indexes(conn, bcolletions, indextype, f)
             bcolletions = []
     wait_build_indexes(conn, bcolletions, indextype, f)
@@ -324,6 +332,7 @@ def load_data(conn, workload):
     host = cfg["host"].replace("http://","")
     f = open(cfg["indexfile"], "w")
     indextype  = cfg["indextype"]
+    staged = cfg["staged"]
     for b in sorted(workload.keys()):
         bv = workload[b]
         create_javascript_udf(b)
@@ -353,12 +362,15 @@ def load_data(conn, workload):
                      cmd = "/opt/couchbase/bin/cbbackupmgr restore --archive " + cfg["backupdir"]
                      cmd += " --repo default --cluster " + cfg["host"]
                      cmd += " --username Administrator --password password --threads 16 --purge "
-                     cmd += " --map-data " + backupcollection +"=" + b + "." + sv["name"] + "." + cv["name"]
+                     cmd += " --map-data " + backupcollection + "=" + b + "." + sv["name"] + "." + cv["name"]
                      systemcmd(cmd)
-                create_collection_indexes(conn, sv["collections"][cc], indextype, True, True, True, f)
+                if not staged :
+                     create_collection_indexes(conn, sv["collections"][cc], indextype, True, True, True, f)
         bucket_memory(workload, b, False)
     f.close()
-    rebuild_indexes(conn, workload, False, None)
+    rebuild_indexes(conn, workload, staged, None)
+    if staged :
+        change_replica(workload)
         
 def create_javascript_udf(tenant) :
     cmd = "curl -s -k -X POST "
@@ -661,6 +673,8 @@ def result_finish(wfd, results) :
     summary["REQUESTS TOTAL TIME"] = str(round(total,3)) + "s"
     if count > 0 :
         summary["REQUESTS AVG TIME"] = str(round(total*1000/count,3)) + "ms"
+    summary["REQUESTS/Second"] = round(count/duration,3)
+    summary["REQUESTS/Second/Core"] = round(count/(duration*cfg["ncores"]),3)
     summary["Compute Uints"] = cu
     summary["Compute Uints Per Second"] = cus
     summary["Compute Uints Per Second Per Tenant"] = cusb
@@ -672,6 +686,7 @@ def result_finish(wfd, results) :
 def run_execute(conn, wfd, workload) :
     if not cfg["execute"]:
        return
+    wfd.write("START TIME : " + str(datetime.datetime.now()) + "\n")
     prepare_stmts(conn, workload)
     nthreads = int((cfg["nthreads"] * int(cfg["load"]))/100)
     tenants = tenant_distribution(nthreads, workload)
@@ -694,27 +709,26 @@ def run_execute(conn, wfd, workload) :
         results.append(j.get())
 
     result_finish(wfd, results) 
+    wfd.write("END TIME : " + str(datetime.datetime.now()) + "\n")
 
 if __name__ == "__main__":
+    print("START TIME : " + str(datetime.datetime.now()) + "\n")
     workload = workload_init()
     conn = n1ql_connection(cfg["host"])
     if cfg["speical"] == "changereplica":
         change_replica(workload)
-        exit (0)
-    if cfg["speical"] == "rebuildindexes":
+    elif cfg["speical"] == "rebuildindexes":
         f = open(cfg["indexfile"], "w")
         rebuild_indexes(conn, workload, True, f)
         f.close()
-        exit (0)
-
-    ext = ""
-    ext += "-" + str(datetime.datetime.now()).replace(" ","T")
-    wfd = open(cfg["workloadfile"]+ext+".txt", "w")
-    create_collections(workload)
-    load_data(conn, workload)
-    wfd.write("START TIME : " + str(datetime.datetime.now()) + "\n")
-    run_execute(conn, wfd, workload)
-    wfd.write("END TIME : " + str(datetime.datetime.now()) + "\n")
-    wfd.close()
+    else :
+        ext = cfg["load"] + "_" + cfg["workload"] + "_" + str(cfg["dataweightdocs"]) + "_" + str(cfg["indextype"]) + "-"
+        ext += str(datetime.datetime.now()).replace(" ","T")
+        wfd = open(cfg["workloadfile"]+ext+".txt", "w")
+        create_collections(workload)
+        load_data(conn, workload)
+        run_execute(conn, wfd, workload)
+        wfd.close()
+        print("END TIME : " + str(datetime.datetime.now()) + "\n")
 
    
