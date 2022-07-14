@@ -7,6 +7,7 @@ kfile="sitaram-oregon.pem"
 aws=false
 shell=false
 shelln=0
+serverless=true
 install=false
 cluster=false
 lvm=false
@@ -19,6 +20,10 @@ while [[ $# -gt 0 ]]; do
     -a|--aws)
       aws=true
       shift 
+      ;;
+    -n|--nonserverless)
+      serverless=false
+      shift
       ;;
     -l|--lvm)
       lvm=true
@@ -63,6 +68,10 @@ set -- "${POSITIONAL_ARGS[@]}" # restore positional parameters
 
 doaws() {
     i=0 
+    serverlessopt=""
+    if [[ "$serverless" == false ]] ; then
+         serverlessopt="--nonserverless"
+    fi
     for h in "${hosts[@]}"
     do 
 	service=${servicenames[${i}]}
@@ -70,13 +79,13 @@ doaws() {
         if [[ "$service" == "data" || "$service" == "index" ]]; then
             ssh -i $kfile -o StrictHostKeychecking=no ec2-user@$h sudo ./ec2.sh -l
 	fi
-        ssh -i $kfile -o StrictHostKeychecking=no ec2-user@$h sudo ./ec2.sh -i -r $rpmfile
+        ssh -i $kfile -o StrictHostKeychecking=no ec2-user@$h sudo ./ec2.sh -i -r $rpmfile $serverlessopt
         if [[ "$service" == "test" ]]; then
              ssh -i $kfile -o StrictHostKeychecking=no ec2-user@$h sudo service couchbase-server stop
 	fi
         ((i=i+1))
     done
-    ssh -i $kfile -o StrictHostKeychecking=no ec2-user@${hosts[0]} sudo ./ec2.sh -c
+    ssh -i $kfile -o StrictHostKeychecking=no ec2-user@${hosts[0]} sudo ./ec2.sh -c $serverlessopt
 }
 
 
@@ -92,11 +101,17 @@ docluster() {
         if [[ $i -eq  0 ]]; then
             /opt/couchbase/bin/couchbase-cli cluster-init -c localhost --cluster-username Administrator --cluster-password password \
 	        --services $service  --cluster-ramsize $ramsize --cluster-index-ramsize $ramsize --index-storage-setting default
+            if [[ "$serverless" == true ]] ; then
+	        curl -u Administrator:password -X POST http://localhost:8091/settings/throttle -d "kvThrottleLimit=2147483647;indexThrottleLimit=2147483647;ftsThrottleLimit=2147483647;n1qlThrottleLimit=2147483647"
+	    fi
         elif [[ "$service" != "test" ]]; then
             /opt/couchbase/bin/couchbase-cli server-add -c localhost --username Administrator \
                 --password password --server-add https://$h:18091 \
                 --server-add-username Administrator --server-add-password password \
                 --services $service
+            if [[ "$serverless" == true ]] ; then
+	        curl -u Administrator:password -X POST http://localhost:8091/settings/throttle -d "kvThrottleLimit=2147483647;indexThrottleLimit=2147483647;ftsThrottleLimit=2147483647;n1qlThrottleLimit=2147483647"
+	    fi
         fi
 	/opt/couchbase/bin/couchbase-cli rebalance -c localhost -u Administrator -p password
         ((i=i+1))
@@ -142,6 +157,11 @@ doinstall() {
      yum -y install ncurses-compat-libs > /tmp/install.log
      yum -y install git >> /tmp/install.log
      yum -y install go >> /tmp/install.log
+     if [[ "$serverless" == true ]] ; then
+          (mkdir -p /etc/couchbase.d ; echo serverless > /etc/couchbase.d/config_profile ; chmod ugo+r /etc/couchbase.d/)
+     else
+	  /bin/rm -f /etc/couchbase.d/config_profile
+     fi
      rpm --install $rpmfile
      (umask 0; mkdir -p /data/backups /data/data; chown -R couchbase:couchbase /data; chmod 777 /data/backups)
      sudo -u ec2-user git clone https://github.com/sitaramv/perfquery.git

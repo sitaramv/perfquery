@@ -414,36 +414,6 @@ def prepare_stmts(conn, workload) :
         bv["prepareds"] = sqs
     return
 
-def notused_wait_build_indexes(conn) :
-    cnt = 1
-    while cnt > 0 :
-        cbody = n1ql_execute(conn, {"statement": "SELECT RAW COUNT(1) FROM system:indexes AS s WHERE s.name != '#sequentialscan' AND s.state IN ['deferred','error']"} , None)
-        cnt = cbody["results"][0]
-        if cnt == 0 :
-            break
-        bstmt = {"statement":"SELECT k, inames FROM system:indexes AS s LET k = NVL2(s.bucket_id, CONCAT2('.', s.bucket_id, s.scope_id, s.keyspace_id), s.keyspace_id) WHERE s.name != '#sequentialscan' AND s.namespace_id = 'default' GROUP BY k LETTING inames = ARRAY_AGG(s.name) FILTER (WHERE s.state IN ['deferred', 'error']) HAVING ARRAY_LENGTH(inames) > 0"}
-        body = n1ql_execute(conn, bstmt , None)
-        for i in body["results"] :
-            r = body["results"][i]
-            bindexes = ""
-            for k in r["inames"] :
-                 if k != 0 :
-                     bindexes += ","
-                 bindexes += r["inames"][k]
-            print ("BUILD INDEX ON ", k, "(", bindexes, ")")
-            n1ql_execute(conn, {"statement": "BUILD INDEX ON " + r["k"] + " (" + bindexes + ")"}, None)
-            time.sleep(5)
-        time.sleep(5)
-
-    cnt = 1
-    while cnt > 0 :
-        cbody = n1ql_execute(conn, {"statement": "SELECT RAW COUNT(1) FROM system:indexes AS s WHERE s.name != '#sequentialscan' AND s.state != 'online'"} , None)
-        cnt = cbody["results"][0]
-        if cnt == 0 :
-            break
-        print ("WAITING FOR INDEXES READY : ", cnt)
-        time.sleep(5)
-
 def wait_build_indexes_collection(conn, collection) :
     stmt = "SELECT RAW COUNT(1) FROM system:indexes AS s"
     stmt += " WHERE s.namespace_id = 'default' AND s.name != '#sequentialscan' AND s.state != 'online'" 
@@ -486,10 +456,11 @@ def n1ql_connection(url):
     return conn
 
 def n1ql_execute(conn, stmt, posparam):
-    stmt['creds'] = '[{"user":"Administrator","pass":"password"}]'
+#    stmt['creds'] = '[{"user":"Administrator","pass":"password"}]'
+    headers = urllib3.make_headers(basic_auth='Administrator:password')
     if posparam:
         stmt['args'] = json.JSONEncoder().encode(posparam)
-    response = conn.request('POST', '/query/service', fields=stmt, encode_multipart=False)
+    response = conn.request('POST', '/query/service', fields=stmt, headers=headers, encode_multipart=False)
     response.read(cache_content=False)
     body = json.loads(response.data.decode('utf8'))
 #    print (json.JSONEncoder().encode(body))
@@ -614,8 +585,8 @@ def result_finish(wfd, results) :
          fbresult[b]["qps"] = round(fbresult[b]["count"]/duration, 3)
          fbresult[b]["qpspc"] = round(fbresult[b]["qps"]/cfg["ncores"], 3)
          fbresult[b]["CUPS"] = {}
-         for ck in fbresult[b]["CU"].keys() :
-             if fbresult[b]["CU"][ck] == 0 :
+         for ck, cv in list(fbresult[b]["CU"].items()):
+             if cv == 0 :
                  del fbresult[b]["CU"][ck]
                  continue
              fbresult[b]["CUPS"][ck] = round(fbresult[b]["CU"][ck]/duration,3)
@@ -633,8 +604,8 @@ def result_finish(wfd, results) :
          fqresult[q]["qps"] = round(fqresult[q]["count"]/duration, 3)
          fqresult[q]["qpspc"] = round(fqresult[q]["qps"]/cfg["ncores"], 3)
          fqresult[q]["CUPS"] = {}
-         for ck in fqresult[q]["CU"].keys() :
-             if fqresult[q]["CU"][ck] == 0 :
+         for ck, cv in list(fqresult[q]["CU"].items()):
+             if cv == 0 :
                  del fqresult[q]["CU"][ck]
                  continue
              fqresult[q]["CUPS"][ck] = round(fqresult[q]["CU"][ck]/duration,3)
@@ -647,8 +618,8 @@ def result_finish(wfd, results) :
             cus[k] = round(cu[k]/duration,3)
             cusb[k] = round(cu[k]/(duration*len(fbresult)),3)
 
-    for k in cu.keys() :
-        if cu[k] == 0 :
+    for k, v in list(cu.items()) :
+        if v == 0 :
             del cu[k]
 
     wfd.write("\n\n ---------------BEGIN REQUESTS BY TENANT-----------\n")
@@ -669,6 +640,8 @@ def result_finish(wfd, results) :
     summary["dataweight"] = cfg["loads"]["dataweight"].copy()
     for k in cfg["loads"]["dataweight"].keys() :
          summary["dataweight"][k] *= cfg["dataweightdocs"] * cfg["dataweightpercollection"]
+         if k != "free" :
+             summary["dataweight"][k] *= cfg["nscopes"]
     summary["REQUESTS TOTAL COUNT"] = count
     summary["REQUESTS TOTAL TIME"] = str(round(total,3)) + "s"
     if count > 0 :
