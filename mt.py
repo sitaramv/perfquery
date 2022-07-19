@@ -82,7 +82,7 @@ cfg = {
                "q06": {"queryCU":0, "jsCU":0, "gsiRU":26, "ftsRU":0, "kvRU":200, "kvWU": 0},
                "q07": {"queryCU":0, "jsCU":0, "gsiRU":13, "ftsRU":0, "kvRU":100, "kvWU": 0},
                "q08": {"queryCU":0, "jsCU":0, "gsiRU":13, "ftsRU":0, "kvRU":100, "kvWU": 100},
-               "q09": {"queryCU":0, "jsCU":0, "gsiRU":13, "ftsRU":0, "kvRU":100, "kvWU": 0},
+               "q09": {"queryCU":1, "jsCU":1, "gsiRU":13, "ftsRU":0, "kvRU":100, "kvWU": 0},
                "000": {"queryCU":0, "jsCU":0, "gsiRU":0, "ftsRU":0, "kvRU":0, "kvWU": 0},
 
              }
